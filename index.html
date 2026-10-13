@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payment RLzzT</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:#0c0b16;color:white;font-family:Arial,sans-serif}
+.container{max-width:430px;margin:auto}
+header{text-align:center;padding:25px}
+h1{color:#b99aff}
+.card{background:#191728;border:1px solid #38304e;border-radius:16px;padding:20px;margin-bottom:18px}
+label{display:block;margin:15px 0 8px}
+input,button{width:100%;padding:14px;border-radius:10px;font-size:16px}
+input{background:#0d0c17;color:white;border:1px solid #51466b}
+button{background:#986bff;color:white;border:0;font-weight:bold;margin-top:14px}
+a{color:#c5adff}
+.small{color:#b8b2c9;font-size:13px;line-height:1.5}
+#hasil{overflow-wrap:anywhere;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Payment RLzzT</h1>
+<p>Pembayaran mudah dan praktis</p>
+</header>
+
+<div class="card">
+<h3>💳 Pilih Pembayaran</h3>
+<p>💙 DANA</p>
+<p>🟢 GoPay</p>
+
+<label for="nominal">Nominal pembayaran (Rp)</label>
+<input id="nominal" type="number" min="1000"
+placeholder="Minimal Rp1.000" inputmode="numeric">
+
+<button id="bayar" onclick="buatQRIS()">Buat QRIS</button>
+<p class="small">Pastikan nominal sudah benar sebelum membayar.</p>
+</div>
+
+<div class="card" id="kotak" hidden>
+<h3>QRIS Pembayaran</h3>
+<p id="hasil">Menunggu respons...</p>
+<img id="gambar" alt="QRIS" style="display:none;width:100%;max-width:280px;background:white;margin:auto">
+<a id="tautan" href="#" target="_blank" rel="noopener" style="display:none">Buka halaman pembayaran</a>
+<button id="cek" onclick="cekStatus()" hidden>Periksa Status Pembayaran</button>
+</div>
+
+<div class="card">
+<h3>📞 Bantuan</h3>
+<p><a href="https://wa.me/6281911522917">WhatsApp Customer Service</a></p>
+<p><a href="https://t.me/RLzzT2">Telegram Customer Service</a></p>
+<p><a href="https://whatsapp.com/channel/0029VbDJd5r4yltTCHKOiB0V">Channel WhatsApp</a></p>
+<p><a href="https://t.me/testiRLzzT">Channel Telegram</a></p>
+</div>
+<p class="small" style="text-align:center">© Payment RLzzT</p>
+</div>
+
+<script>
+let transaksi = "";
+
+async function buatQRIS(){
+  const nominal = Number(document.getElementById("nominal").value);
+  const tombol = document.getElementById("bayar");
+  const kotak = document.getElementById("kotak");
+  const hasil = document.getElementById("hasil");
+
+  if(!Number.isSafeInteger(nominal) || nominal < 1000){
+    alert("Nominal minimal Rp1.000");
+    return;
+  }
+
+  tombol.disabled = true;
+  kotak.hidden = false;
+  hasil.textContent = "Meminta QRIS...";
+  document.getElementById("gambar").style.display = "none";
+  document.getElementById("tautan").style.display = "none";
+  document.getElementById("cek").hidden = true;
+
+  try{
+    const response = await fetch("/api/create-qris",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({amount:nominal})
+    });
+    const json = await response.json();
+
+    if(!response.ok || !json.success || !json.data){
+      throw new Error(json.message || "QRIS gagal dibuat");
+    }
+
+    const data = json.data;
+    transaksi = data.transaction_id || "";
+
+    hasil.textContent = "Nominal: Rp" + nominal.toLocaleString("id-ID");
+
+    if(data.qr_url){
+      const gambar = document.getElementById("gambar");
+      gambar.src = data.qr_url;
+      gambar.style.display = "block";
+    }
+
+    if(data.payment_url){
+      const tautan = document.getElementById("tautan");
+      tautan.href = data.payment_url;
+      tautan.style.display = "inline-block";
+    }
+
+    document.getElementById("cek").hidden = !transaksi;
+
+    if(!data.qr_url && !data.payment_url){
+      hasil.textContent += "\nQRIS belum tersedia pada respons penyedia.";
+    }
+  }catch(error){
+    hasil.textContent = "Gagal membuat QRIS: " + error.message;
+  }finally{
+    tombol.disabled = false;
+  }
+}
+
+async function cekStatus(){
+  if(!transaksi) return;
+
+  const hasil = document.getElementById("hasil");
+  hasil.textContent = "Memeriksa status pembayaran...";
+
+  try{
+    const response = await fetch("/api/check-qris",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({transaction_id:transaksi})
+    });
+    const json = await response.json();
+
+    if(!response.ok || !json.success){
+      throw new Error(json.message || "Status belum tersedia");
+    }
+
+    hasil.textContent = "Respons status dari penyedia:\n" +
+      JSON.stringify(json.data,null,2) +
+      "\nJangan anggap lunas sebelum status dikonfirmasi.";
+  }catch(error){
+    hasil.textContent = "Gagal memeriksa status: " + error.message;
+  }
+}
+</script>
+</body>
+  </html>
