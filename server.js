@@ -1,13 +1,15 @@
 
 const express = require("express");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(express.static(__dirname));
 
 app.get("/", (req, res) => {
-  res.send("Payment RLzzT Backend Aktif!");
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 app.get("/api/health", (req, res) => {
@@ -31,19 +33,20 @@ async function buatQris(params) {
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body: new URLSearchParams({
+      action: params.action,
       account_id: accountId,
       secret_token: secretToken,
-      ...params
+      ...params.data
     })
   });
 
-  const data = await response.json();
+  const result = await response.json();
 
-  if (!response.ok || data.success !== true) {
-    throw new Error(data.message || "Permintaan BuatQris gagal");
+  if (!response.ok || result.success !== true) {
+    throw new Error(result.message || "Permintaan BuatQris gagal");
   }
 
-  return data.data;
+  return result.data;
 }
 
 app.post("/api/create-qris", async (req, res) => {
@@ -57,56 +60,56 @@ app.post("/api/create-qris", async (req, res) => {
       });
     }
 
-    const result = await buatQris({
+    const data = await buatQris({
       action: "api_create_qris",
-      amount: String(amount),
-      description: "Payment RLzzT"
+      data: {
+        amount: String(amount),
+        description: "Payment RLzzT"
+      }
     });
 
     res.json({
       success: true,
-      data: {
-        transaction_id: result.transaction_id,
-        qr_url: result.qr_url,
-        payment_url: result.payment_url,
-        amount: result.amount,
-        status: result.status
-      }
+      data
     });
   } catch (error) {
-    console.error("Create QRIS gagal:", error.message);
+    console.error("Buat QRIS gagal:", error.message);
     res.status(502).json({
       success: false,
-      message: "Gagal membuat QRIS. Periksa konfigurasi dan log server."
+      message: error.message
     });
   }
 });
 
 app.post("/api/check-qris", async (req, res) => {
   try {
-    const transactionId = String(req.body.transaction_id || "").trim();
+    const transactionId = String(
+      req.body.transaction_id || ""
+    ).trim();
 
     if (!transactionId || transactionId.length > 100) {
       return res.status(400).json({
         success: false,
-        message: "Transaction ID tidak valid"
+        message: "ID transaksi tidak valid"
       });
     }
 
-    const result = await buatQris({
+    const data = await buatQris({
       action: "api_check_status",
-      transaction_id: transactionId
+      data: {
+        transaction_id: transactionId
+      }
     });
 
     res.json({
       success: true,
-      data: result
+      data
     });
   } catch (error) {
     console.error("Cek status gagal:", error.message);
     res.status(502).json({
       success: false,
-      message: "Gagal memeriksa status pembayaran"
+      message: error.message
     });
   }
 });
